@@ -6,8 +6,8 @@ Repository of the scripts used for the analyses done in the research study: "Lev
 
 Scripts used to deploy the FL environment with flower and to run the different training of models.
 
-1. _server.py: deploy the FL central server to aggregate weights
-2. _client_nodeN.py: deploy and run a federated client, connected to the central server
+1. FL_server.py: deploy the FL central server to aggregate weights
+2. FL_nodeN.py: deploy and run a federated client, connected to the central server
 3. main_.py: create the federated model
 
 ## scripts
