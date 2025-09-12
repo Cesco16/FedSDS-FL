@@ -18,43 +18,15 @@ import numpy as np
 import pandas as pd
 
 c11 = pd.read_csv('./../FL/Results/c11_'+preproc+'_iso.csv', header=0)['0']
-##c12 = pd.read_csv('./../FL/Results/c12_'+preproc+'_iso.csv', header=0)['0']
-#c13 = pd.read_csv('./../FL/Results/c13_'+preproc+'_iso.csv', header=0)['0']
-
-##c21 = pd.read_csv('./../FL/Results/c21_'+preproc+'_iso.csv', header=0)['0']
 c22 = pd.read_csv('./../FL/Results/c22_'+preproc+'_iso.csv', header=0)['0']
-#c23 = pd.read_csv('./../FL/Results/c23_'+preproc+'_iso.csv', header=0)['0']
-
-#c31 = pd.read_csv('./../FL/Results/c31_'+preproc+'_iso.csv', header=0)['0']
-#c32 = pd.read_csv('./../FL/Results/c32_'+preproc+'_iso.csv', header=0)['0']
 #c33 = pd.read_csv('./../FL/Results/c33_'+preproc+'_iso.csv', header=0)['0']
 
-#C1 = pd.read_csv('/home/PERSONALE/francesco.casadei20/'+dis1+'/C1_'+preproc+'_fed.csv', header=0)['0']
-#C2 = pd.read_csv('/home/PERSONALE/francesco.casadei20/'+dis1+'/C2_'+preproc+'_fed.csv', header=0)['0']#
-#C3 = pd.read_csv('/home/PERSONALE/francesco.casadei20/'+dis1+'/C3_'+preproc+'_fed.csv', header=0)['0']
-
 C11 = pd.read_csv('./../FL/Results/C11_'+preproc+'_fed_bias.csv', header=0)['0']
-##C12 = pd.read_csv('./../FL/Results/C12_'+preproc+'_fed_bias.csv', header=0)['0']
-#C13 = pd.read_csv('./../FL/Results/C13_'+preproc+'_fed_bias.csv', header=0)['0']
-
-##C21 = pd.read_csv('./../FL/Results/C21_'+preproc+'_fed_bias.csv', header=0)['0']
 C22 = pd.read_csv('./../FL/Results/C22_'+preproc+'_fed_bias.csv', header=0)['0']
-#C23 = pd.read_csv('./../FL/Results/C23_'+preproc+'_fed_bias.csv', header=0)['0']
-
-#C31 = pd.read_csv('./../FL/Results/C31_'+preproc+'_fed_bias.csv', header=0)['0']
-#C32 = pd.read_csv('./../FL/Results/C32_'+preproc+'_fed_bias.csv', header=0)['0']
 #C33 = pd.read_csv('./../FL/Results/C33_'+preproc+'_fed_bias.csv', header=0)['0']
 
 G11 = pd.read_csv('./../FL/Results/C11_'+preproc+'_fed_unbias.csv', header=0)['0']
-##G12 = pd.read_csv('./../FL/Results/C12_'+preproc+'_fed_unbias.csv', header=0)['0']
-#G13 = pd.read_csv('./../FL/Results/C13_'+preproc+'_fed_unbias.csv', header=0)['0']
-
-##G21 = pd.read_csv('./../FL/Results/C21_'+preproc+'_fed_unbias.csv', header=0)['0']
 G22 = pd.read_csv('./../FL/Results/C22_'+preproc+'_fed_unbias.csv', header=0)['0']
-#G23 = pd.read_csv('./../FL/Results/C23_'+preproc+'_fed_unbias.csv', header=0)['0']
-
-#G31 = pd.read_csv('./../FL/Results/C31_'+preproc+'_fed_unbias.csv', header=0)['0']
-#G32 = pd.read_csv('./../FL/Results/C32_'+preproc+'_fed_unbias.csv', header=0)['0']
 #G33 = pd.read_csv('./../FL/Results/C33_'+preproc+'_fed_unbias.csv', header=0)['0']
 
 #FEDAVG
@@ -148,65 +120,37 @@ def corrected_test(group1, group2, label):
     labels.append(label)
     #print(f"{label}: statistic={stat}, raw p-value={p}")
 
-#n1 = [c11,c21,c31,C1,G11,G21,G31,C11,C21,C31]
 n1 = [c11, C1, G11, C11]
-#n2 = [c12,c22,c32,C2,G12,G22,G32,C12,C22,C32]
 n2 = [c22, C2, G22, C22]
-#n3 = [c13,c23,c33,C3,G13,G23,G33,C13,C23,C33]
+#n3 = [c33,C3,G33,C33]
 
 medie1 = [np.mean(array) for array in n1]
 medie2 = [np.mean(array) for array in n2]
+#medie3 = [np.mean(array) for array in n3]
 
 
 indice1= np.argmax(medie1)
 indice2= np.argmax(medie2)
+#indice3= np.argmax(medie3)
 
 
 # Seleziona l'array con la media più alta
 max1 = n1[indice1]
 max2 = n2[indice2]
-
-
+#max3 = n3[indice3]
 
 # Run your tests (abbreviated for clarity; use all 30 like before)
 corrected_test(max1, c11, "f11 vs i11")
-#corrected_test(max1, c21, "f11 vs i21")
-#corrected_test(max1, c31, "f11 vs i11")
-
-#corrected_test(max2, c12, "f22 vs i12")
 corrected_test(max2, c22, "f22 vs i22")
-#corrected_test(max2, c32, "f2 vs i32")
-
-#corrected_test(max3, c13, "f33 vs i13")
-#corrected_test(max3, c23, "f33 vs i23")
-
 
 corrected_test(max1, C1, "f11 vs avg11")
 corrected_test(max2, C2, "f11 vs avg21")
 
-
 corrected_test(max1, G11, "f11 vs g11")
-#corrected_test(max1, G21, "f11 vs g21")
-#corrected_test(max1, G31, "f11 vs g11")
-
-#corrected_test(max2, G12, "f11 vs g11")
 corrected_test(max2, G22, "f11 vs g21")
-#corrected_test(max2, G32, "f11 vs g11")
-
-#corrected_test(max3, G13, "f11 vs g11")
-#corrected_test(max3, G23, "f11 vs g21")
-
 
 corrected_test(max1, C11, "f11 vs f11")
-#corrected_test(max1, C21, "f11 vs f21")
-#corrected_test(max1, C31, "f11 vs f31")
-
-#corrected_test(max2, C12, "f11 vs f12")
 corrected_test(max2, C22, "f11 vs f22")
-#corrected_test(max2, C32, "f11 vs f32")
-
-#corrected_test(max3, C13, "f11 vs f13")
-#corrected_test(max3, C23, "f11 vs f23")
 
 
 # Apply Holm-Bonferroni correction (FWER control)
@@ -492,6 +436,3 @@ plt.ylabel('Survival probability')
 plt.title('KM curves')
 plt.savefig('./../FL/Results/km_curves_all.svg', bbox_inches='tight')
 #plt.show()
-
-
-
