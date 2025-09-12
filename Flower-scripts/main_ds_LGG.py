@@ -1,7 +1,6 @@
-# Author: Francesco Casadei
-# Email: francesco.casadei20@unibo.it
-# Date: 19/02/2023
-# Modified by Luciana Carota for a unique test file and 5 nodes 22/11/2024
+# Author: Francesco Casadei, Luciana Carota
+# Email: francesco.casadei20@unibo.it, luciana.carota@unibo.it
+# Date: 19/05/2025
 
 # MODEL DEEPSURV FROM PYCOX
 
@@ -32,7 +31,6 @@ def load_data(data_path_train) -> Tuple[Dict, Dict]:
 
     #function to prepare the y variable
     get_target = lambda df: (df.iloc[:, 0].values.astype('int32'), df.iloc[:, 1].values.astype('int32'))
-    #data_path_train = './Node1/'
 
     #Read data
     # SYNTHETIC UNBIASED
@@ -248,21 +246,6 @@ class FLModel(mlflow.pyfunc.PythonModel):
                     # Convert `Parameters` to `List[np.ndarray]`
                     aggregated_ndarrays: List[np.ndarray] = parameters_to_ndarrays(aggregated_parameters)
 
-                    # Save aggregated_ndarrays
-                    # print(f"Saving round {server_round} aggregated_ndarrays...")
-                    # np.savez(f"https://urldefense.proofpoint.com/v2/url?u=http-3A__results.zip&d=DwIGAg&c=5rLNXN0mp_7LMh3Fds96xpjyD06ZuE2RU7zikolS0lg&r=InnoW2J7WO2GyBp1EYkPTuFH7X5gCTIwBjlI02urYgc&m=txI-RX7PkACrYpay7SwX5NXUz0PjXpxO0i1t9mV9tBsiw6ZBmJaRCLwAFTCnWewe&s=1s9SXyY6Q47h_-q6hZPb8CayrsjANrGTAOwYxjuwF54&e= ", *aggregated_ndarrays)
-                    # print(f"Saving zip{server_round} aggregated_ndarrays...")
-
-                    # files = {
-                    #     'file1.txt': b'Content of file 1',  # TODO: save something in files (c-index during epochs)
-                    #     'file2.txt': b'Content of file 2'
-                    # }
-
-                    # # Create the zip file in memory
-                    # in_memory_zip = create_zip_in_memory(files)
-                    # with open('https://urldefense.proofpoint.com/v2/url?u=http-3A__results.zip&d=DwIGAg&c=5rLNXN0mp_7LMh3Fds96xpjyD06ZuE2RU7zikolS0lg&r=InnoW2J7WO2GyBp1EYkPTuFH7X5gCTIwBjlI02urYgc&m=txI-RX7PkACrYpay7SwX5NXUz0PjXpxO0i1t9mV9tBsiw6ZBmJaRCLwAFTCnWewe&s=1s9SXyY6Q47h_-q6hZPb8CayrsjANrGTAOwYxjuwF54&e= ', 'wb') as f:
-                    #     f.write(in_memory_zip.getvalue())
-
                 return aggregated_parameters, aggregated_metrics
 
         return AggregateCustomMetricStrategy(min_available_clients=1,
@@ -331,13 +314,8 @@ class FLModel(mlflow.pyfunc.PythonModel):
             def __init__(self, dataset_path):
                 # def __init__(self, model):
                 self.data = self.load_data(dataset_path)
-                # print(self.data)
-                # print(self.data[0])
-                # print(len(self.data[0]['train0'].columns))
-                # in_features=len(self.data[0]['train0'].columns)#[0]
 
                 in_features = len(self.data[0][0]['train0'].columns)
-                # print('in features')
                 params['in_features'] = in_features
 
                 self.patients_train = len(self.data[0][0]['train0'])
@@ -367,9 +345,6 @@ class FLModel(mlflow.pyfunc.PythonModel):
                 self.model = CoxPH(net, tt.optim.Adam(weight_decay=params['w_decay']))
                 self.model.net.to(device)
 
-                #print('weights: ', [val.cpu().numpy() for _, val in self.model.net.state_dict().items()])
-
-                # self.model = model
                 self.cindex = []
                 self.training_stats = {}
                 self.central_epoch = 0
@@ -390,9 +365,6 @@ class FLModel(mlflow.pyfunc.PythonModel):
                 print('\n Try to fit ...')
                 training_stats = {'c_index': [], 'ibs': [], 'epochs': [], 'num_round': [],
                                   'node_name': []}  # To store training data
-                # print(X_train.keys())
-
-                #print('MAIN EPOCH: ', self.central_epoch)
 
                 if (self.central_epoch % max_epochs) == 0:
                     print('NEW CV!')
@@ -491,112 +463,27 @@ class FLModel(mlflow.pyfunc.PythonModel):
                     x_test = X_train["test9"]
                     y_test = Y_train["test9"]
 
-                # xtrain = pd.DataFrame(x_train)
-                # print(y_train)
-                # ytrain = pd.concat((pd.DataFrame(y_train[0]), pd.DataFrame(y_train[1])), axis=1)#pd.DataFrame(y_train)
-
-                # get_target = lambda df: (df.iloc[:, 0].values.astype('int32'), df.iloc[:, 1].values.astype('int32'))
-
-                # x_train, x_val, y_train, y_val = train_test_split(xtrain, ytrain, test_size=0.2)
-                # x_train = x_train.reset_index(drop=True)
-                # y_train = y_train.reset_index(drop=True)
-                # y_train = get_target(y_train)
-
-                # x_val = x_val.reset_index(drop=True)
-                # y_val = y_val.reset_index(drop=True)
-                # y_val = get_target(y_val)
-
-                # standardize_cols = ['age','wbc_cont','hb_cont','plt','bm_blast']
-                # standardize_cols = ['age','i_cpss_score','i_cpss_risk']
-
-                ##standardize_cols = ['AOD','Neutrophils','Hemoglobin','Platelets','BMB']
-                ##features = list(x_train.columns)
-                ##standardize_index = []
-                ##for i in standardize_cols:
-                ##    if i in features:
-                ##        standardize_index.append(x_train.columns.get_loc(i))
-                ##scaler = MinMaxScaler()
-                ##x_train.iloc[:, standardize_index] = scaler.fit_transform(x_train.iloc[:, standardize_index])
-                ##scaler = MinMaxScaler()
-                ##x_val.iloc[:, standardize_index] = scaler.fit_transform(x_val.iloc[:, standardize_index])
-                ##print('standardize')
-                ##print(x_train.shape)
 
                 trainloader = (np.array(x_train), y_train)
                 valloader = (np.array(x_val), y_val)
                 testloader = (np.array(x_test), y_test)
 
-                #print('CV PHASE OF DATA PREPARATION')
-                #print('CENTRAL EPOCH ', self.central_epoch)
-                ##print(x_train.columns)
-                #print(x_val.columns)
-                #print(x_test.columns)
-
                 for k in np.arange(0, num_epochs_int, 1):
-                    #print('TRAIN DATA BEFORE FIT')
-                    #print(trainloader[0].shape)
-                    #print(trainloader[0][0, :])
-                    #print(trainloader[0], trainloader[1])
-
-                    #print('VAL DATA BEFORE FIT')
-                    #print(valloader[0].shape)
-                    #print(valloader[0][0, :])
-                    #print(valloader[0], valloader[1])
-
-                    #print('TEST DATA BEFORE FIT')
-                    #print(testloader[0].shape)
-                    #print(testloader[0][0, :])
-                    #print(testloader[0], testloader[1])
-
-                    # print('BEFORE LR_FINDER')
-                    #print('weights: ', [val.cpu().numpy() for _, val in self.model.net.state_dict().items()])
-
-                    # lrfinder = self.model.lr_finder(trainloader[0], trainloader[1], batch_size,
-                    #                                  tolerance=10)
-                    # lr = lrfinder.get_best_lr()
-                    # self.model.optimizer.set_lr(0.01)
-
-                    #print('CENTRAL EPOCH')
-                    #print(self.central_epoch)
-
-                    # print('LEARNING RATE')
-                    # print(lr)
-
-                    ##print('BEFORE FIT')
-                    ##print('weights: ', [val.cpu().numpy() for _, val in self.model.net.state_dict().items()])
-                    #print('model parameters: ', self.model.optimizer.state_dict())
 
                     self.model.fit(trainloader[0], trainloader[1], batch_size, epochs=1,  # callbacks, verbose,
                                    val_data=valloader, val_batch_size=batch_size)
-                    # print('fitting roud ', k , ': ', self.get_weight())
-
-                    #print('AFTER FIT')
-                    #print('weights: ', [val.cpu().numpy() for _, val in self.model.net.state_dict().items()])
-                    #print('model parameters: ', self.model.optimizer.state_dict())
-                    #print(testloader[0])
                     _ = self.model.compute_baseline_hazards(testloader[0], testloader[1])
                     surv = self.model.predict_surv_df(testloader[0])
                     c_index = obtain_c_index(surv, testloader[1][0], testloader[1][1])
 
-                    #print('AFTER C_INDEX CALCULATION')
-                    #print('weights: ', [val.cpu().numpy() for _, val in self.model.net.state_dict().items()])
 
                     mlflow.log_metric(f"c_index", f'{c_index:.3f}')
                     FileSave(self.metrics_file,str(str(self.central_epoch)+','+str(float(c_index))+'\n'))
-                    # mlflow.log_metric(f"ibs", f'{ibs:.3f}')
                     self.central_epoch = self.central_epoch + 1
-                    #if self.central_epoch in [99,199,299,399,499,599,699,799,899,999]:
-                    print('C-INDEX AT THE END OF FIT:')
-                    print(c_index)
 
                     if self.central_epoch == 10*max_epochs:
                         FileSave(self.metrics_file,str('Number of patients for train:'+str(self.patients_train)+'\n'))
                         FileSave(self.metrics_file,str('Number of patients for test:'+str(self.patients_test)+'\n'))
-
-            #def get_weight(self):
-            #    print('GET PARAMETERS...')
-            #    # print('weights: ', [val.cpu().numpy() for _, val in self.model.net.state_dict().items()])
-            #    return [val.cpu().numpy() for _, val in self.model.net.state_dict().items()]
 
             def set_weight(self, parameters):
                 print('SET PARAMETERS...')
@@ -610,34 +497,6 @@ class FLModel(mlflow.pyfunc.PythonModel):
             def get_weight(self):# -> List[torch.Tensor]:
                 # Estrai tutti i parametri come tensori CPU clonati
                 return [val.detach().clone().cpu().numpy() for _, val in self.model.net.state_dict().items()]
-
-            # def set_parameters(model, parameters: List[np.ndarray]):
-            #    print('SET PARAMETERS...')
-            #    params_dict = zip(model.net.state_dict().keys(), parameters)
-            #    state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
-            #    state_dict['net.0.batch_norm.num_batches_tracked'] = torch.Tensor(1)
-            #    state_dict['net.1.batch_norm.num_batches_tracked'] = torch.Tensor(1)
-            #    state_dict['net.2.batch_norm.num_batches_tracked'] = torch.Tensor(1)
-            #    # print(state_dict)
-            #    model.net.load_state_dict(state_dict, strict=False)  # True)
-
-            #def set_weight(self, parameters):
-            #    print('SET PARAMETERS...')
-            #    state_dict = self.model.net.state_dict()
-            #    new_state_dict = OrderedDict()#
-
-            #    keys = list(state_dict.keys())
-            #    if len(keys) != len(parameters):
-            #        raise ValueError(f"Mismatch: {len(keys)} keys vs {len(parameters)} parameters")
-
-            #    for k, v in zip(keys, parameters):
-            #        if v.shape != state_dict[k].shape:
-            #            print(f"[WARNING] Shape mismatch for {k}: {v.shape} vs {state_dict[k].shape}")
-            #            new_state_dict[k] = state_dict[k]  # fallback: originale
-            #        else:
-            #            new_state_dict[k] = v
-
-            #    return self.model.net.load_state_dict(new_state_dict, strict=False)
 
             def evaluate(self, X_test, Y_test) -> Tuple[float, float]:
                 print('EVALUATE!')
@@ -685,13 +544,6 @@ class FLModel(mlflow.pyfunc.PythonModel):
 
                 print('COMPUTING C INDEX IN EVALUATE')
 
-                # ev = EvalSurv(surv, test_loader_eval[1][0], test_loader_eval[1][1], censor_surv='km')
-                # c_index = ev.concordance_td()
-
-                # _ = self.model.compute_baseline_hazards(test_loader_eval[0], test_loader_eval[1])
-                #print(test_loader_eval[0])
-                #print('weights: ', [val.cpu().numpy() for _, val in self.model.net.state_dict().items()])
-
                 _ = self.model.compute_baseline_hazards(test_loader_eval[0], test_loader_eval[1])
                 surv = self.model.predict_surv_df(test_loader_eval[0])
                 c_index = obtain_c_index(surv, test_loader_eval[1][0], test_loader_eval[1][1])
@@ -711,17 +563,5 @@ class FLModel(mlflow.pyfunc.PythonModel):
 import cloudpickle
 
 model = FLModel()
-# with open(r'C:\Users\gasti\Documents\Progetti\Genomed4All\Macchine_GCP\Models\DeepSurv_v3_0_5\DeepSurv_v1.pk', 'wb') as f:
-with open(r'/mnt/c/users/lenovo/desktop/FedSDS_biased_flower/DeepSurv_cv_lgg.pk', 'wb') as f: #_scaled75
+with open(r'/mnt/c/users/lenovo/desktop/FedSDS_biased_flower/DeepSurv_cv_lgg.pk', 'wb') as f:
     cloudpickle.dump(model, f)
-
-# import mlflow as mlf
-# mlflow.set_tracking_uri("https://urldefense.proofpoint.com/v2/url?u=http-3A__localhost-3A5002_&d=DwIGAg&c=5rLNXN0mp_7LMh3Fds96xpjyD06ZuE2RU7zikolS0lg&r=InnoW2J7WO2GyBp1EYkPTuFH7X5gCTIwBjlI02urYgc&m=txI-RX7PkACrYpay7SwX5NXUz0PjXpxO0i1t9mV9tBsiw6ZBmJaRCLwAFTCnWewe&s=isz5ZMUSgIZGWIKTxt1qE-Bccaz03YnZKxqh3tZKgiQ&e= ")
-##mlflow.set_tracking_uri("https://urldefense.proofpoint.com/v2/url?u=https-3A__playground.gpapdev.cnag.eu_mlflow_&d=DwIGAg&c=5rLNXN0mp_7LMh3Fds96xpjyD06ZuE2RU7zikolS0lg&r=InnoW2J7WO2GyBp1EYkPTuFH7X5gCTIwBjlI02urYgc&m=txI-RX7PkACrYpay7SwX5NXUz0PjXpxO0i1t9mV9tBsiw6ZBmJaRCLwAFTCnWewe&s=zjpDz291yhhI1Sony4sm0GoZOL3cGuFBDyaqjvbFnWU&e= ")
-# mlflow.set_experiment("test2")
-
-# mlf.pyfunc.log_model(
-#         python_model=model,
-#         artifact_path="modello_pytorch_new",
-#         registered_model_name="DeepSurv_data",
-#     )
