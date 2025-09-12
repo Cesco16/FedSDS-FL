@@ -142,15 +142,19 @@ max2 = n2[indice2]
 # Run your tests (abbreviated for clarity; use all 30 like before)
 corrected_test(max1, c11, "f11 vs i11")
 corrected_test(max2, c22, "f22 vs i22")
+#corrected_test(max3, c33, "f33 vs i33")
 
 corrected_test(max1, C1, "f11 vs avg11")
 corrected_test(max2, C2, "f11 vs avg21")
+#corrected_test(max3, C3, "f11 vs avg21")
 
 corrected_test(max1, G11, "f11 vs g11")
 corrected_test(max2, G22, "f11 vs g21")
+#corrected_test(max3, G33, "f11 vs g21")
 
 corrected_test(max1, C11, "f11 vs f11")
 corrected_test(max2, C22, "f11 vs f22")
+#corrected_test(max3, C33, "f11 vs f22")
 
 
 # Apply Holm-Bonferroni correction (FWER control)
@@ -436,3 +440,4 @@ plt.ylabel('Survival probability')
 plt.title('KM curves')
 plt.savefig('./../FL/Results/km_curves_all.svg', bbox_inches='tight')
 #plt.show()
+
