@@ -15,6 +15,7 @@ Scripts used to deploy the FL environment with flower and to run the different t
 1. select_seed.py: select the best synthetic dataset using a Random Forest classifier
 2. bias_data.py: bias the selected synthetic dataset in each local node
 3. plot.py: generate plots
+4. compute_privacy.py: compute privacy metrics and generate pdf and cdf histograms
 
 ## models
 
