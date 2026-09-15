@@ -29,6 +29,20 @@ It contains the packages needed to create the Python virtual environments:
 - vaebgm: environment to run synthetic data generation
 - genomed4all: environment to run FL training
 
-# Licence
+# Citation
+
+If you use this code or methodology in your research, please cite our manuscript:
+
+@misc{cesco2026fedsdsfl,
+  author       = {Casadei F. and Apellaniz P.A.},
+  title        = {FedSDS-FL: Federated Synthetic Data Sharing Framework},
+  year         = {2026},
+  publisher    = {GitHub},
+  journal      = {GitHub Repository},
+  howpublished = {\url{https://github.com/Cesco16/FedSDS-FL}},
+  commit       = {main}
+}
+
+# License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
