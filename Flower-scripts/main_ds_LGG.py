@@ -1,6 +1,7 @@
 # Author: Francesco Casadei, Luciana Carota
 # Email: francesco.casadei20@unibo.it, luciana.carota@unibo.it
 # Date: 19/05/2025
+# Modified by Luciana Carota for a unique test file and 5 nodes 22/11/2024
 
 # MODEL DEEPSURV FROM PYCOX
 
@@ -12,6 +13,16 @@ import os
 import warnings
 
 warnings.filterwarnings("ignore")
+
+# ============================================================================
+# CONFIGURAZIONE DELLA STRATEGY DI FEDERATED LEARNING
+# Cambia questi due valori per passare da FedAvg a FedProx o FedNova.
+# Puoi anche sovrascrivere STRATEGY_NAME da riga di comando lanciando:
+#   python FL_server.py fedprox     (oppure: fedavg | fednova)
+# ============================================================================
+STRATEGY_NAME = "fedprox"   # "fedavg" | "fedprox" | "fednova"
+PROXIMAL_MU = 0.6#0.1           # usato solo se STRATEGY_NAME == "fedprox"
+
 
 def load_data(data_path_train) -> Tuple[Dict, Dict]:
     import pandas as pd
@@ -31,6 +42,7 @@ def load_data(data_path_train) -> Tuple[Dict, Dict]:
 
     #function to prepare the y variable
     get_target = lambda df: (df.iloc[:, 0].values.astype('int32'), df.iloc[:, 1].values.astype('int32'))
+    #data_path_train = './Node1/'
 
     #Read data
     # SYNTHETIC UNBIASED
@@ -64,7 +76,7 @@ def load_data(data_path_train) -> Tuple[Dict, Dict]:
     R = pd.read_csv(data_path_train + 'CENTRALIZED.csv', index_col=0, sep=',')
     R = R[features].sample(frac=1, random_state=42).reset_index(drop=True).copy()
 
-    mode = 'centralized'
+    mode = 'iso'
 
     if mode == 'fed_bias':
         train1 = N1.copy()
@@ -207,7 +219,7 @@ def load_data(data_path_train) -> Tuple[Dict, Dict]:
 
 
 class FLModel(mlflow.pyfunc.PythonModel):
-    def create_strategy(self, num_rounds=100):
+    def create_strategy(self, num_rounds=100, strategy_name=None, proximal_mu=None):
         import io
         import zipfile
 
@@ -231,9 +243,16 @@ class FLModel(mlflow.pyfunc.PythonModel):
         import numpy as np
         from flwr.server.client_proxy import ClientProxy
         from typing import List, Tuple, Union, Optional, Dict
-        from flwr.common import FitRes, Scalar, Parameters, parameters_to_ndarrays
+        from flwr.common import (
+            FitRes, Scalar, Parameters, parameters_to_ndarrays, ndarrays_to_parameters,
+        )
+
+        # scegli la strategy: parametro esplicito > costante globale in cima al file
+        strategy_name = (strategy_name if strategy_name is not None else STRATEGY_NAME).lower()
+        proximal_mu = PROXIMAL_MU if proximal_mu is None else proximal_mu
 
         class AggregateCustomMetricStrategy(flwr.server.strategy.FedAvg):
+            """Strategy originale (FedAvg), lasciata invariata per compatibilita'."""
             def aggregate_fit(self,
                               server_round: int,
                               results: List[Tuple[ClientProxy, FitRes]],
@@ -248,12 +267,101 @@ class FLModel(mlflow.pyfunc.PythonModel):
 
                 return aggregated_parameters, aggregated_metrics
 
-        return AggregateCustomMetricStrategy(min_available_clients=1,
-                                             min_evaluate_clients=1,
-                                             min_fit_clients=1,
-                                             fraction_fit=1.0,
-                                             fraction_evaluate = 1.0
+        class FedNovaStrategy(flwr.server.strategy.FedAvg):
+            """
+            FedNova (Wang et al., 2020 - https://arxiv.org/abs/2007.07481).
+
+            Flower NON include FedNova come strategy nativa (a differenza di
+            FedProx), quindi la implemento qui come sottoclasse di FedAvg che
+            cambia solo l'aggregazione dei pesi (aggregate_fit).
+
+            Ogni client esegue tau_i step locali (che qui possono variare da
+            nodo a nodo, ad es. per dati/epoche diverse) e riporta questo
+            valore nei metrics di fit() sotto la chiave "tau" (vedi
+            FL_node1.py / model.get_tau()). Il server normalizza il
+            contributo di ciascun client per il proprio tau_i e poi lo scala
+            per tau_eff = media pesata dei tau_i, correggendo il bias verso i
+            client che fanno piu' step locali (il problema di "objective
+            inconsistency" descritto nel paper).
+
+                new_weights = old_weights - tau_eff * sum_i [ p_i * (delta_i / tau_i) ]
+            """
+
+            def aggregate_fit(self, server_round, results, failures):
+                if not results:
+                    return None, {}
+                if failures and not self.accept_failures:
+                    return None, {}
+
+                if getattr(self, "current_parameters", None) is None:
+                    # nessuno storico dei parametri globali: fallback su FedAvg puro
+                    return super().aggregate_fit(server_round, results, failures)
+
+                global_ndarrays = parameters_to_ndarrays(self.current_parameters)
+                total_examples = sum(fit_res.num_examples for _, fit_res in results)
+
+                tau_eff = 0.0
+                weighted_normalized_deltas = None
+                for _, fit_res in results:
+                    p_i = fit_res.num_examples / total_examples
+                    tau_i = max(float(fit_res.metrics.get("tau", 1)), 1.0)
+                    tau_eff += p_i * tau_i
+
+                    client_ndarrays = parameters_to_ndarrays(fit_res.parameters)
+                    delta_i = [g - l for g, l in zip(global_ndarrays, client_ndarrays)]
+                    normalized_delta_i = [d / tau_i for d in delta_i]
+
+                    if weighted_normalized_deltas is None:
+                        weighted_normalized_deltas = [p_i * d for d in normalized_delta_i]
+                    else:
+                        weighted_normalized_deltas = [
+                            acc + p_i * d for acc, d in zip(weighted_normalized_deltas, normalized_delta_i)
+                        ]
+
+                new_ndarrays = [
+                    g - tau_eff * d for g, d in zip(global_ndarrays, weighted_normalized_deltas)
+                ]
+                self.current_parameters = ndarrays_to_parameters(new_ndarrays)
+
+                metrics_aggregated = {}
+                if self.fit_metrics_aggregation_fn:
+                    fit_metrics = [(res.num_examples, res.metrics) for _, res in results]
+                    metrics_aggregated = self.fit_metrics_aggregation_fn(fit_metrics)
+
+                return self.current_parameters, metrics_aggregated
+
+            def initialize_parameters(self, client_manager):
+                params = super().initialize_parameters(client_manager)
+                self.current_parameters = params
+                return params
+
+            def configure_fit(self, server_round, parameters, client_manager):
+                self.current_parameters = parameters
+                return super().configure_fit(server_round, parameters, client_manager)
+
+        common_kwargs = dict(
+            min_available_clients=2,
+            min_evaluate_clients=2,
+            min_fit_clients=2,
+            fraction_fit=1.0,
+            fraction_evaluate=1.0,
         )
+
+        if strategy_name == "fedprox":
+            # --- Strategy NATIVA di Flower, nessuna implementazione custom ---
+            print(f"[create_strategy] Uso FedProx nativo di Flower (proximal_mu={proximal_mu})")
+            return flwr.server.strategy.FedProx(proximal_mu=proximal_mu, **common_kwargs)
+        elif strategy_name == "fednova":
+            print("[create_strategy] Uso FedNova (strategy custom, vedi FedNovaStrategy)")
+            return FedNovaStrategy(**common_kwargs)
+        elif strategy_name == "fedavg":
+            print("[create_strategy] Uso FedAvg (strategy originale, invariata)")
+            return AggregateCustomMetricStrategy(**common_kwargs)
+        else:
+            raise ValueError(
+                f"strategy_name '{strategy_name}' non riconosciuto. "
+                "Usa 'fedavg', 'fedprox' oppure 'fednova'."
+            )
 
     def create_model(self, dataset_path=""):
         import torch  # For building the networks
@@ -283,17 +391,17 @@ class FLModel(mlflow.pyfunc.PythonModel):
 
         params = {
             'in_features': 0,  # dinamically created in PhytonWrapper
-            'num_nodes': [32,32],#[64,64,64],#[32, 32],
+            'num_nodes': [32, 32],  # [64,64,64],#[32, 32],
             'out_features': 1,
             'batch_norm': True,  # False,
-            'dropout': 0.5,#0.5,#0.7,
+            'dropout': 0.5,  # 0.5,#0.7,
             'output_bias': False,
-            'activation': torch.nn.SELU,#torch.nn.ReLU,
+            'activation': torch.nn.SELU,  # torch.nn.ReLU,
             'w_decay': 0,
-            'batch_size': 256,#512,  # 126
+            'batch_size': 256,  # 512,  # 126
             'num_epochs_int': 10,
             'max_epochs': 100,
-            'lr': 0.001,#0.01
+            'lr': 0.001,  # 0.01
         }
 
         def obtain_c_index(surv_f, time, censor):
@@ -310,9 +418,47 @@ class FLModel(mlflow.pyfunc.PythonModel):
             with open(filename, "a") as myfile:
                 myfile.write(content)
 
+        class ProxCoxPHLoss(torch.nn.Module):
+            """
+            Wrapper attorno alla loss originale di CoxPH (CoxPHLoss di pycox)
+            che aggiunge il termine prossimale di FedProx (Li et al., 2018):
+
+                loss_locale = loss_originale + (mu/2) * ||w_locale - w_globale||^2
+
+            Se mu == 0 (default, e sempre il caso per FedAvg/FedNova) si
+            comporta esattamente come la loss originale: nessun impatto sulle
+            altre strategy. torchtuples chiama `self.loss(*out, *target)` ad
+            ogni batch (vedi torchtuples.Model.compute_metrics), quindi basta
+            sostituire l'attributo `model.loss` con questo wrapper.
+            """
+
+            def __init__(self, net, base_loss):
+                super().__init__()
+                self.net = net
+                self.base_loss = base_loss
+                self.mu = 0.0
+                self.global_params = None
+
+            def set_mu(self, mu: float):
+                self.mu = float(mu)
+
+            def snapshot_global_params(self):
+                # da chiamare subito dopo aver caricato i pesi globali nel
+                # modello (cioe' dopo set_weight, prima del training locale)
+                self.global_params = [p.detach().clone() for p in self.net.parameters()]
+
+            def forward(self, *args):
+                loss = self.base_loss(*args)
+                if self.mu > 0 and self.global_params is not None:
+                    prox_term = sum(
+                        torch.sum((p - g) ** 2)
+                        for p, g in zip(self.net.parameters(), self.global_params)
+                    )
+                    loss = loss + (self.mu / 2) * prox_term
+                return loss
+
         class PythonModelWrapper:
             def __init__(self, dataset_path):
-                # def __init__(self, model):
                 self.data = self.load_data(dataset_path)
 
                 in_features = len(self.data[0][0]['train0'].columns)
@@ -340,20 +486,24 @@ class FLModel(mlflow.pyfunc.PythonModel):
                                               activation=params['activation'])
 
                 data_path = realpath(dirname(dataset_path))
-                data_path_cindex = data_path + "\\cindex.csv"
+                data_path_cindex = data_path + "//cindex_review_fednova.csv"
 
                 self.model = CoxPH(net, tt.optim.Adam(weight_decay=params['w_decay']))
                 self.model.net.to(device)
+                # Avvolgo la loss originale per poter aggiungere il termine
+                # prossimale di FedProx quando serve (mu=0 => nessun effetto).
+                self.model.loss = ProxCoxPHLoss(self.model.net, self.model.loss)
 
                 self.cindex = []
                 self.training_stats = {}
                 self.central_epoch = 0
                 self.metrics_file = data_path_cindex
+                self.last_tau = 0  # numero di step locali dell'ultima fit() (usato da FedNova)
 
             def predict(self, model_input):
                 return self.model.predict(model_input)
 
-            def fit(self, X_train, Y_train, epochs=100, batch_size=params['batch_size'], steps_per_epoch=1):
+            def fit(self, X_train, Y_train, epochs=100, batch_size=params['batch_size'], steps_per_epoch=1, config=None):
 
                 from sklearn.preprocessing import MinMaxScaler, StandardScaler
                 from sklearn.model_selection import train_test_split
@@ -389,8 +539,9 @@ class FLModel(mlflow.pyfunc.PythonModel):
 
                     self.model.net.to(device)
                     self.model.optimizer.set_lr(params['lr'])
+                    # Riavvolgo la loss anche qui: il modello e' stato ricreato da zero.
+                    self.model.loss = ProxCoxPHLoss(self.model.net, self.model.loss)
 
-                    #print('weights: ', [val.cpu().numpy() for _, val in self.model.net.state_dict().items()])
 
                 if self.central_epoch < max_epochs:
                     x_train = X_train["train0"]
@@ -468,6 +619,28 @@ class FLModel(mlflow.pyfunc.PythonModel):
                 valloader = (np.array(x_val), y_val)
                 testloader = (np.array(x_test), y_test)
 
+                # --- FedProx: legge proximal_mu dal config inviato dal server -----
+                # Il server FedProx nativo di Flower inietta automaticamente la
+                # chiave "proximal_mu" nel config passato a fit() dal client.
+                # Se la strategy e' FedAvg o FedNova, config non conterra' questa
+                # chiave (o sara' None) e il termine prossimale resta disattivato.
+                proximal_mu = 0.0
+                if config is not None:
+                    proximal_mu = config.get('proximal_mu', 0.0)
+                if isinstance(self.model.loss, ProxCoxPHLoss):
+                    self.model.loss.set_mu(proximal_mu)
+                    # I pesi correnti del net sono quelli globali appena ricevuti
+                    # (set_weight viene chiamato dal client PRIMA di fit()), quindi
+                    # questo e' il momento giusto per fare lo snapshot.
+                    self.model.loss.snapshot_global_params()
+
+                # --- FedNova: conta gli step locali effettivi (tau_i) -------------
+                # ogni chiamata a self.model.fit(..., epochs=1, ...) qui sotto fa
+                # ceil(n_train/batch_size) step di ottimizzazione; il ciclo la
+                # ripete num_epochs_int volte.
+                steps_per_epoch_est = int(np.ceil(len(trainloader[0]) / batch_size))
+                self.last_tau = steps_per_epoch_est * num_epochs_int
+
                 for k in np.arange(0, num_epochs_int, 1):
 
                     self.model.fit(trainloader[0], trainloader[1], batch_size, epochs=1,  # callbacks, verbose,
@@ -476,14 +649,16 @@ class FLModel(mlflow.pyfunc.PythonModel):
                     surv = self.model.predict_surv_df(testloader[0])
                     c_index = obtain_c_index(surv, testloader[1][0], testloader[1][1])
 
-
                     mlflow.log_metric(f"c_index", f'{c_index:.3f}')
                     FileSave(self.metrics_file,str(str(self.central_epoch)+','+str(float(c_index))+'\n'))
                     self.central_epoch = self.central_epoch + 1
+                    print('C-INDEX AT THE END OF FIT:')
+                    print(c_index)
 
                     if self.central_epoch == 10*max_epochs:
                         FileSave(self.metrics_file,str('Number of patients for train:'+str(self.patients_train)+'\n'))
                         FileSave(self.metrics_file,str('Number of patients for test:'+str(self.patients_test)+'\n'))
+
 
             def set_weight(self, parameters):
                 print('SET PARAMETERS...')
@@ -497,6 +672,10 @@ class FLModel(mlflow.pyfunc.PythonModel):
             def get_weight(self):# -> List[torch.Tensor]:
                 # Estrai tutti i parametri come tensori CPU clonati
                 return [val.detach().clone().cpu().numpy() for _, val in self.model.net.state_dict().items()]
+
+            def get_tau(self) -> int:
+                """Numero di step locali (batch) eseguiti nell'ultima fit(). Usato da FedNova."""
+                return int(self.last_tau)
 
             def evaluate(self, X_test, Y_test) -> Tuple[float, float]:
                 print('EVALUATE!')
@@ -563,5 +742,7 @@ class FLModel(mlflow.pyfunc.PythonModel):
 import cloudpickle
 
 model = FLModel()
-with open(r'/mnt/c/users/lenovo/desktop/FedSDS_biased_flower/DeepSurv_cv_lgg.pk', 'wb') as f:
+#with open(r'/mnt/c/users/lenovo/desktop/FedSDS_biased_flower/DeepSurv_cv_mds.pk', 'wb') as f:
+#    cloudpickle.dump(model, f)
+with open(r'/mnt/c/users/lenovo/desktop/FedSDS_review/DeepSurv_cv_lgg_rev2.pk', 'wb') as f:
     cloudpickle.dump(model, f)
