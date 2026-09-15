@@ -28,3 +28,7 @@ It contains the federated models generate using the main_.py scripts. Models are
 It contains the packages needed to create the Python virtual environments:
 - vaebgm: environment to run synthetic data generation
 - genomed4all: environment to run FL training
+
+# Licence
+
+This project is licensed under the MIT License - see the LICENSE file for details.
