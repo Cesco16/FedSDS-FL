@@ -33,6 +33,7 @@ It contains the packages needed to create the Python virtual environments:
 
 If you use this code or methodology in your research, please cite our manuscript:
 
+'''
 @misc{cesco2026fedsdsfl,
   author       = {Casadei F. and Apellaniz P.A.},
   title        = {FedSDS-FL: Federated Synthetic Data Sharing Framework},
@@ -42,6 +43,7 @@ If you use this code or methodology in your research, please cite our manuscript
   howpublished = {\url{https://github.com/Cesco16/FedSDS-FL}},
   commit       = {main}
 }
+'''
 
 # License
 
