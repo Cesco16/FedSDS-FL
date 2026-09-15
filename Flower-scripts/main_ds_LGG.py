@@ -14,12 +14,6 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-# ============================================================================
-# CONFIGURAZIONE DELLA STRATEGY DI FEDERATED LEARNING
-# Cambia questi due valori per passare da FedAvg a FedProx o FedNova.
-# Puoi anche sovrascrivere STRATEGY_NAME da riga di comando lanciando:
-#   python FL_server.py fedprox     (oppure: fedavg | fednova)
-# ============================================================================
 STRATEGY_NAME = "fedprox"   # "fedavg" | "fedprox" | "fednova"
 PROXIMAL_MU = 0.6#0.1           # usato solo se STRATEGY_NAME == "fedprox"
 
